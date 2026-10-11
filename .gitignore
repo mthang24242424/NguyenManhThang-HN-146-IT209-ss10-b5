@@ -1,0 +1,9 @@
+# Không commit file .env thực tế lên Git (chứa thông tin nhạy cảm)
+.env
+
+# Docker build cache
+.dockerignore
+
+# Logs
+*.log
+logs/

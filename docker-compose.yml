@@ -1,0 +1,49 @@
+services:
+  # ─── Service 1: PostgreSQL Database ────────────────────────────────────────
+  database:
+    image: postgres:15-alpine
+    container_name: db-server
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Service 2: Backend Web API ─────────────────────────────────────────────
+  backend:
+    image: nginx:alpine          # Thay bằng image thực tế của ứng dụng
+    container_name: app-container
+    restart: unless-stopped
+    ports:
+      - "${PORT}:80"
+    environment:
+      DB_HOST: database          # Hostname DNS nội bộ = tên service
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      database:
+        condition: service_healthy   # Chờ DB healthy trước khi khởi động
+    networks:
+      - backend-net
+
+# ─── Named Volumes (root level) ───────────────────────────────────────────────
+volumes:
+  pgdata:
+    name: db-data                # Đặt tên cố định, khớp với bài Ex4
+
+# ─── Custom Networks (root level) ─────────────────────────────────────────────
+networks:
+  backend-net:
+    driver: bridge
+    name: app-net                # Đặt tên cố định, khớp với bài Ex4
