@@ -175,10 +175,6 @@ PORT=8080
 ```
 
 ---
+![alt text](image.png)
 
-## Sản phẩm nộp bài
-
-- [x] `docker-compose.yml` — 2 services (`backend`, `database`), đầy đủ `depends_on`, `networks`, `volumes` ở root level
-- [x] `.env.example` — mẫu biến môi trường
-- [x] `.gitignore` — loại trừ `.env` thực tế
-- [x] `README.md` — hướng dẫn đầy đủ với kết quả mong đợi
+![alt text](image-1.png)
