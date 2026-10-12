@@ -20,30 +20,30 @@ services:
 
   # ─── Service 2: Backend Web API ─────────────────────────────────────────────
   backend:
-    image: nginx:alpine          # Thay bằng image thực tế của ứng dụng
+    image: nginx:alpine
     container_name: app-container
     restart: unless-stopped
     ports:
       - "${PORT}:80"
     environment:
-      DB_HOST: database          # Hostname DNS nội bộ = tên service
+      DB_HOST: database
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
       database:
-        condition: service_healthy   # Chờ DB healthy trước khi khởi động
+        condition: service_healthy
     networks:
       - backend-net
 
 # ─── Named Volumes (root level) ───────────────────────────────────────────────
 volumes:
   pgdata:
-    name: db-data                # Đặt tên cố định, khớp với bài Ex4
+    name: db-data
 
 # ─── Custom Networks (root level) ─────────────────────────────────────────────
 networks:
   backend-net:
     driver: bridge
-    name: app-net                # Đặt tên cố định, khớp với bài Ex4
+    name: app-net

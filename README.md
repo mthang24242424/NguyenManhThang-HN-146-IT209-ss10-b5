@@ -2,57 +2,35 @@
 
 ## Mục tiêu
 
-Đóng gói bài Ex4 thành tệp khai báo `docker-compose.yml` theo chuẩn **Infrastructure as Code (IaC)** — quản lý toàn bộ hạ tầng đa container bằng một lệnh duy nhất.
+Đóng gói bài Ex4 thành tệp khai báo `docker-compose.yml` theo chuẩn **Infrastructure as Code (IaC)**.  
+Quản lý hạ tầng đa container bằng Docker Compose CLI v2 và bảo mật biến môi trường bằng `.env`.
 
 ---
 
 ## Cấu trúc thư mục
 
 ```
-Ex5/
+ex5/
 ├── docker-compose.yml   ← Khai báo 2 services: backend + database
-├── .env                 ← Biến môi trường thực tế (KHÔNG commit lên Git)
 ├── .env.example         ← Mẫu biến môi trường (commit lên Git)
-├── .gitignore           ← Loại trừ .env khỏi Git
+├── .gitignore           ← Loại trừ .env thực tế khỏi Git
 └── README.md
 ```
 
----
-
-## Kiến trúc
-
-```
-┌──────────────────────────────────────────────────────┐
-│              Docker Compose Stack                    │
-│                                                      │
-│  ┌─────────────────┐  depends_on  ┌───────────────┐ │
-│  │    backend      │─────────────▶│   database    │ │
-│  │  (nginx:alpine) │   DNS: database  (postgres)  │ │
-│  │  port ${PORT}:80│              │  healthcheck  │ │
-│  └────────┬────────┘              └───────┬───────┘ │
-│           │                               │         │
-│           └──────── backend-net ──────────┘         │
-│                    (bridge / app-net)                │
-│                               │ mount               │
-│                         ┌─────▼──────┐              │
-│                         │   pgdata   │              │
-│                         │  (db-data) │              │
-│                         └────────────┘              │
-└──────────────────────────────────────────────────────┘
-```
+> **Lưu ý:** File `.env` chứa mật khẩu thực tế KHÔNG được commit — đã khai báo trong `.gitignore`.
 
 ---
 
 ## Cách chạy
 
-### 1. Chuẩn bị file .env
+### Bước 1 — Chuẩn bị file `.env`
 
 ```bash
 cp .env.example .env
-# Chỉnh sửa .env nếu cần thay đổi password hoặc port
 ```
 
-Nội dung `.env`:
+Nội dung `.env` (chỉnh sửa nếu cần):
+
 ```env
 DB_NAME=appdb
 DB_USER=appuser
@@ -60,25 +38,46 @@ DB_PASSWORD=secret123
 PORT=8080
 ```
 
-### 2. Khởi chạy toàn bộ stack
+### Bước 2 — Khởi chạy toàn bộ stack
 
 ```bash
 docker compose up -d
 ```
 
-Docker Compose sẽ tự động:
+Kết quả mong đợi:
+
+```
+[+] Running 3/3
+ ✔ Network app-net    Created
+ ✔ Volume  db-data    Created
+ ✔ Container db-server    Started
+ ✔ Container app-container  Started
+```
+
+Docker Compose tự động:
 - Tạo network `app-net` (bridge)
 - Tạo volume `db-data`
-- Khởi chạy `database` (postgres:15-alpine)
-- Chờ `database` healthy rồi mới khởi chạy `backend`
+- Khởi chạy `database` (postgres:15-alpine) và chờ healthcheck xanh
+- Khởi chạy `backend` (nginx:alpine) sau khi DB sẵn sàng
 
-### 3. Kiểm tra trạng thái
+### Bước 3 — Kiểm tra trạng thái
 
 ```bash
-# Xem trạng thái các service
 docker compose ps
+```
 
-# Xem logs realtime
+Kết quả mong đợi:
+
+```
+NAME            IMAGE                COMMAND                  SERVICE    STATUS
+app-container   nginx:alpine         "/docker-entrypoint.…"   backend    running
+db-server       postgres:15-alpine   "docker-entrypoint.s…"   database   running (healthy)
+```
+
+### Bước 4 — Xem logs
+
+```bash
+# Xem logs realtime toàn bộ stack
 docker compose logs -f
 
 # Xem logs riêng từng service
@@ -86,84 +85,100 @@ docker compose logs database
 docker compose logs backend
 ```
 
-### 4. Dừng và dọn dẹp
+### Bước 5 — Dừng và dọn dẹp
 
 ```bash
 # Dừng và xóa containers + network (giữ lại volume)
 docker compose down
 
-# Dừng và xóa tất cả bao gồm cả volume (XÓA DỮ LIỆU)
+# Dừng và xóa tất cả kể cả volume (XÓA DỮ LIỆU)
 docker compose down -v
 ```
 
 ---
 
-## Giải thích `docker-compose.yml`
-
-### Service `database`
+## Nội dung `docker-compose.yml`
 
 ```yaml
-database:
-  image: postgres:15-alpine
-  environment:
-    POSTGRES_DB: ${DB_NAME}       # Đọc từ file .env
-    POSTGRES_USER: ${DB_USER}
-    POSTGRES_PASSWORD: ${DB_PASSWORD}
-  volumes:
-    - pgdata:/var/lib/postgresql/data
-  healthcheck:
-    test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-```
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: db-server
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-- Biến `${DB_*}` được nạp tự động từ file `.env` cùng thư mục.
-- `healthcheck` dùng `pg_isready` để xác nhận Postgres thực sự sẵn sàng nhận kết nối.
+  backend:
+    image: nginx:alpine
+    container_name: app-container
+    restart: unless-stopped
+    ports:
+      - "${PORT}:80"
+    environment:
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - backend-net
 
-### Service `backend`
-
-```yaml
-backend:
-  environment:
-    DB_HOST: database             # Tên service = hostname DNS nội bộ
-  depends_on:
-    database:
-      condition: service_healthy  # Chờ healthcheck xanh
-```
-
-- `DB_HOST: database` — Docker Compose DNS tự phân giải `database` thành IP container.
-- `condition: service_healthy` đảm bảo backend không khởi động trước khi DB sẵn sàng.
-
-### Root-level `volumes` & `networks`
-
-```yaml
 volumes:
   pgdata:
-    name: db-data      # Tên volume cố định, dễ nhận biết
+    name: db-data
 
 networks:
   backend-net:
     driver: bridge
-    name: app-net      # Tên network cố định
+    name: app-net
 ```
-
-Khai báo ở root level bắt buộc khi muốn dùng `name` tùy chỉnh và chia sẻ giữa nhiều service.
 
 ---
 
-## So sánh Ex4 (CLI) vs Ex5 (Compose)
+## Giải thích các thành phần chính
 
-| Tiêu chí | Ex4 — Docker CLI | Ex5 — Docker Compose |
-|---|---|---|
-| Cách khởi chạy | Chạy từng lệnh `docker run` | Một lệnh `docker compose up -d` |
-| Quản lý cấu hình | Hardcode trong script | Khai báo YAML + `.env` |
-| Bảo mật secrets | Lộ trong lệnh CLI | Tách vào `.env`, không commit |
-| Thứ tự khởi động | Thủ công (sleep) | `depends_on` + `healthcheck` |
-| Reproducibility | Thấp | Cao (IaC) |
+| Thành phần | Ý nghĩa |
+|---|---|
+| `${DB_NAME}` | Biến được nạp tự động từ file `.env` |
+| `depends_on: condition: service_healthy` | Backend chỉ khởi động sau khi DB healthcheck xanh |
+| `healthcheck: pg_isready` | Xác nhận PostgreSQL thực sự sẵn sàng nhận kết nối |
+| `DB_HOST: database` | Tên service = hostname DNS nội bộ, Docker tự phân giải IP |
+| `volumes: pgdata: name: db-data` | Named volume khai báo ở root level, dữ liệu bền vững |
+| `networks: backend-net: name: app-net` | Custom bridge network khai báo ở root level |
+
+---
+
+## Nội dung `.env.example`
+
+```env
+# PostgreSQL Database
+DB_NAME=appdb
+DB_USER=appuser
+DB_PASSWORD=secret123
+
+# Port mapping ra ngoài host
+PORT=8080
+```
 
 ---
 
 ## Sản phẩm nộp bài
 
-- [x] `docker-compose.yml` — khai báo 2 services với `depends_on`, `networks`, `volumes`
+- [x] `docker-compose.yml` — 2 services (`backend`, `database`), đầy đủ `depends_on`, `networks`, `volumes` ở root level
 - [x] `.env.example` — mẫu biến môi trường
 - [x] `.gitignore` — loại trừ `.env` thực tế
-- [x] `README.md` — tài liệu hướng dẫn
+- [x] `README.md` — hướng dẫn đầy đủ với kết quả mong đợi
