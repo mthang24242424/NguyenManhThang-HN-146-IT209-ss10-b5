@@ -20,7 +20,7 @@ services:
 
   # ─── Service 2: Backend Web API ─────────────────────────────────────────────
   backend:
-    image: nginx:alpine
+    build: .
     container_name: app-container
     restart: unless-stopped
     ports:
